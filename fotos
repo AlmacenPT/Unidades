@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<meta charset="UTF-8">
+<title>Registro Fotos Vehículos</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+body{
+    font-family:Arial;
+    padding:20px;
+}
+
+input,button{
+    padding:8px;
+    margin:5px;
+}
+
+table{
+    border-collapse:collapse;
+    margin-top:15px;
+}
+
+th,td{
+    border:1px solid #ccc;
+    padding:8px;
+    text-align:center;
+}
+
+img{
+    width:120px;
+    border-radius:6px;
+}
+
+.btn-eliminar{
+    background:#e74c3c;
+    color:white;
+    border:none;
+    padding:6px 10px;
+    cursor:pointer;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h3>Registro de Fotos Vehículo</h3>
+
+<label>Placa</label>
+<input id="placa" type="text" readonly>
+
+<label>Fecha Programada</label>
+<input id="fecha" type="date" readonly>
+
+<br><br>
+
+<input id="foto" type="file" accept="image/*" capture="environment">
+
+<button onclick="subir()">Subir Foto</button>
+
+<p id="contador">Fotos: 0 / 4</p>
+
+<table id="tablaFotos">
+<thead>
+<tr>
+<th>Foto</th>
+<th>Acción</th>
+</tr>
+</thead>
+
+<tbody></tbody>
+
+</table>
+
+
+<script>
+
+const supabaseUrl = "https://hwjhemjgyducdnxbahak.supabase.co"
+const supabaseKey = "sb_publishable_vDgKuupqEqGzLe8Eot0JVg_osYFTOMn"
+
+const clienteSupabase = supabase.createClient(supabaseUrl, supabaseKey)
+
+let totalFotos = 0
+
+
+// RECIBIR PARAMETROS URL
+
+const params = new URLSearchParams(window.location.search)
+
+const placaURL = params.get("placa")
+const fechaURL = params.get("fecha")
+
+document.getElementById("placa").value = placaURL
+document.getElementById("fecha").value = fechaURL
+
+
+// CARGAR FOTOS
+buscar()
+
+
+async function buscar(){
+
+    const placa = document.getElementById("placa").value
+    const fecha = document.getElementById("fecha").value
+
+    const { data, error } = await clienteSupabase
+        .from("fotos")
+        .select("*")
+        .eq("placa", placa)
+        .eq("fecha", fecha)
+
+    if(error){
+        console.log(error)
+        return
+    }
+
+    let tbody = document.querySelector("#tablaFotos tbody")
+    tbody.innerHTML = ""
+
+    totalFotos = data.length
+
+    document.getElementById("contador").innerText =
+        "Fotos: " + totalFotos + " / 4"
+
+    data.forEach(f => {
+
+        let fila = `
+        <tr>
+            <td>
+                <img src="${f.url}">
+            </td>
+            <td>
+                <button class="btn-eliminar"
+                onclick="eliminarFoto('${f.id}','${f.url}')">
+                Eliminar
+                </button>
+            </td>
+        </tr>
+        `
+
+        tbody.innerHTML += fila
+    })
+
+}
+
+
+// SUBIR FOTO
+async function subir(){
+
+    const placa = document.getElementById("placa").value
+    const fecha = document.getElementById("fecha").value
+
+    if(totalFotos >= 4){
+        alert("Máximo 4 fotos")
+        return
+    }
+
+    const input = document.getElementById("foto")
+    const file = input.files[0]
+
+    if(!file){
+        alert("Seleccione una foto")
+        return
+    }
+
+    const nombre = Date.now() + "_" + file.name
+
+
+    // SUBIR STORAGE
+    const { error:uploadError } = await clienteSupabase
+        .storage
+        .from("imagenes")
+        .upload(nombre, file)
+
+    if(uploadError){
+        console.log(uploadError)
+        alert("Error subiendo imagen")
+        return
+    }
+
+
+    // OBTENER URL
+    const { data:urlData } = clienteSupabase
+        .storage
+        .from("imagenes")
+        .getPublicUrl(nombre)
+
+    const url = urlData.publicUrl
+
+
+    // INSERTAR BD
+    const { error:insertError } = await clienteSupabase
+        .from("fotos")
+        .insert([
+            {
+                placa: placa,
+                fecha: fecha,
+                url: url
+            }
+        ])
+
+    if(insertError){
+        console.log(insertError)
+        alert("Error guardando registro")
+        return
+    }
+
+    input.value=""
+
+    buscar()
+
+}
+
+
+// ELIMINAR FOTO
+async function eliminarFoto(id,url){
+
+    if(!confirm("¿Eliminar foto?")) return
+
+    // OBTENER NOMBRE DEL ARCHIVO
+    const nombre = url.split("/").pop()
+
+    // BORRAR STORAGE
+    await clienteSupabase
+        .storage
+        .from("imagenes")
+        .remove([nombre])
+
+
+    // BORRAR REGISTRO
+    await clienteSupabase
+        .from("fotos")
+        .delete()
+        .eq("id",id)
+
+    buscar()
+
+}
+
+</script>
+
+</body>
+</html>
