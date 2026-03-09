@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
 
 <meta charset="UTF-8">
@@ -8,38 +9,69 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
+
 body{
     font-family:Arial;
     padding:20px;
+    background:#f5f5f5;
+}
+
+h3{
+    margin-bottom:10px;
 }
 
 input,button{
-    padding:8px;
+    padding:10px;
     margin:5px;
+    font-size:14px;
 }
 
-table{
-    border-collapse:collapse;
-    margin-top:15px;
+button{
+    background:#3498db;
+    color:white;
+    border:none;
+    border-radius:5px;
 }
 
-th,td{
-    border:1px solid #ccc;
-    padding:8px;
-    text-align:center;
+button:disabled{
+    background:#95a5a6;
 }
 
-img{
-    width:120px;
-    border-radius:6px;
+.galeria{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-top:20px;
+}
+
+.card{
+    position:relative;
+    background:white;
+    border-radius:8px;
+    overflow:hidden;
+    box-shadow:0 2px 5px rgba(0,0,0,0.2);
+}
+
+.card img{
+    width:100%;
+    display:block;
 }
 
 .btn-eliminar{
+    position:absolute;
+    top:5px;
+    right:5px;
     background:#e74c3c;
     color:white;
     border:none;
-    padding:6px 10px;
+    padding:5px 8px;
+    border-radius:4px;
     cursor:pointer;
+}
+
+#contador{
+    font-weight:bold;
+    margin-top:10px;
 }
 
 </style>
@@ -51,30 +83,20 @@ img{
 <h3>Registro de Fotos Vehículo</h3>
 
 <label>Placa</label>
-<input id="placa" type="text" readonly>
+<input id="placa" readonly>
 
-<label>Fecha Programada</label>
+<label>Fecha</label>
 <input id="fecha" type="date" readonly>
 
-<br><br>
+<br>
 
 <input id="foto" type="file" accept="image/*" capture="environment">
 
-<button onclick="subir()">Subir Foto</button>
+<button id="btnSubir" onclick="subir()">Subir Foto</button>
 
 <p id="contador">Fotos: 0 / 4</p>
 
-<table id="tablaFotos">
-<thead>
-<tr>
-<th>Foto</th>
-<th>Acción</th>
-</tr>
-</thead>
-
-<tbody></tbody>
-
-</table>
+<div class="galeria" id="galeria"></div>
 
 
 <script>
@@ -98,61 +120,53 @@ document.getElementById("placa").value = placaURL
 document.getElementById("fecha").value = fechaURL
 
 
-// CARGAR FOTOS
 buscar()
 
+
+// CARGAR FOTOS
 
 async function buscar(){
 
     const placa = document.getElementById("placa").value
     const fecha = document.getElementById("fecha").value
 
-    const { data, error } = await clienteSupabase
+    const { data } = await clienteSupabase
         .from("fotos")
         .select("*")
-        .eq("placa", placa)
-        .eq("fecha", fecha)
+        .eq("placa",placa)
+        .eq("fecha",fecha)
 
-    if(error){
-        console.log(error)
-        return
-    }
-
-    let tbody = document.querySelector("#tablaFotos tbody")
-    tbody.innerHTML = ""
+    const galeria = document.getElementById("galeria")
+    galeria.innerHTML=""
 
     totalFotos = data.length
 
     document.getElementById("contador").innerText =
-        "Fotos: " + totalFotos + " / 4"
+        "Fotos: "+totalFotos+" / 4"
 
     data.forEach(f => {
 
-        let fila = `
-        <tr>
-            <td>
-                <img src="${f.url}">
-            </td>
-            <td>
-                <button class="btn-eliminar"
-                onclick="eliminarFoto('${f.id}','${f.url}')">
-                Eliminar
-                </button>
-            </td>
-        </tr>
+        galeria.innerHTML += `
+
+        <div class="card">
+
+            <img src="${f.url}">
+
+            <button class="btn-eliminar"
+            onclick="eliminarFoto('${f.id}','${f.url}')">
+            X
+            </button>
+
+        </div>
+
         `
-
-        tbody.innerHTML += fila
     })
-
 }
 
 
 // SUBIR FOTO
-async function subir(){
 
-    const placa = document.getElementById("placa").value
-    const fecha = document.getElementById("fecha").value
+async function subir(){
 
     if(totalFotos >= 4){
         alert("Máximo 4 fotos")
@@ -167,104 +181,110 @@ async function subir(){
         return
     }
 
-    // ===== REDIMENSIONAR IMAGEN =====
+    const btn = document.getElementById("btnSubir")
+
+    btn.disabled=true
+    btn.innerText="Subiendo..."
+
+
+    // REDIMENSIONAR
 
     const img = new Image()
     const reader = new FileReader()
 
-    reader.onload = e => img.src = e.target.result
+    reader.onload=e=>img.src=e.target.result
     reader.readAsDataURL(file)
 
-    await new Promise(resolve => img.onload = resolve)
+    await new Promise(r=>img.onload=r)
 
-    const canvas = document.createElement("canvas")
+    const canvas=document.createElement("canvas")
 
-    const maxSize = 800
+    const max=800
 
-    let width = img.width
-    let height = img.height
+    let w=img.width
+    let h=img.height
 
-    if(width > height){
-        if(width > maxSize){
-            height = height * (maxSize / width)
-            width = maxSize
+    if(w>h){
+        if(w>max){
+            h=h*(max/w)
+            w=max
         }
     }else{
-        if(height > maxSize){
-            width = width * (maxSize / height)
-            height = maxSize
+        if(h>max){
+            w=w*(max/h)
+            h=max
         }
     }
 
-    canvas.width = width
-    canvas.height = height
+    canvas.width=w
+    canvas.height=h
 
-    const ctx = canvas.getContext("2d")
-    ctx.drawImage(img,0,0,width,height)
+    const ctx=canvas.getContext("2d")
 
-    const blob = await new Promise(resolve =>
-        canvas.toBlob(resolve,"image/jpeg",0.7)
-    )
+    ctx.drawImage(img,0,0,w,h)
 
-    // ===== SUBIR IMAGEN PEQUEÑA =====
+    const blob=await new Promise(r=>canvas.toBlob(r,"image/jpeg",0.7))
 
-    const nombre = Date.now() + ".jpg"
 
-    const { error:uploadError } = await clienteSupabase
+    const nombre=Date.now()+".jpg"
+
+
+    // SUBIR STORAGE
+
+    const {error}=await clienteSupabase
         .storage
         .from("imagenes")
-        .upload(nombre, blob)
+        .upload(nombre,blob)
 
-    if(uploadError){
-        console.log(uploadError)
+    if(error){
         alert("Error subiendo imagen")
+        btn.disabled=false
+        btn.innerText="Subir Foto"
         return
     }
 
-    const { data:urlData } = clienteSupabase
+
+    const {data:urlData}=clienteSupabase
         .storage
         .from("imagenes")
         .getPublicUrl(nombre)
 
-    const url = urlData.publicUrl
+    const url=urlData.publicUrl
 
-    const { error:insertError } = await clienteSupabase
+
+    // GUARDAR BD
+
+    await clienteSupabase
         .from("fotos")
-        .insert([
-            {
-                placa: placa,
-                fecha: fecha,
-                url: url
-            }
-        ])
-
-    if(insertError){
-        console.log(insertError)
-        alert("Error guardando registro")
-        return
-    }
+        .insert([{
+            placa:placaURL,
+            fecha:fechaURL,
+            url:url
+        }])
 
     input.value=""
 
+    btn.disabled=false
+    btn.innerText="Subir Foto"
+
     buscar()
+
 }
 
+
 // ELIMINAR FOTO
+
 async function eliminarFoto(id,url){
 
     if(!confirm("¿Eliminar foto?")) return
 
-    // OBTENER NOMBRE DEL ARCHIVO
-    const nombre = url.split("/").pop()
+    const nombre=url.split("/").pop()
 
-    // BORRAR STORAGE
     await clienteSupabase
         .storage
         .from("imagenes")
         .remove([nombre])
 
-
-    // BORRAR REGISTRO
     await clienteSupabase
         .from("fotos")
         .delete()
