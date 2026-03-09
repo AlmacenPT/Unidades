@@ -47,6 +47,8 @@ th{
 }
 </style>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
 </head>
 
 <body>
@@ -63,6 +65,7 @@ Placa
 <input type="text" id="placa">
 
 <button onclick="guardar()">Registrar</button>
+<button onclick="generarReporte()">Generar Reporte PDF</button>
 
 <table id="tabla">
 <thead>
@@ -90,9 +93,23 @@ const clienteSupabase = window.supabase.createClient(
 )
 
 // FECHA HOY
-const hoy = new Date().toISOString().split("T")[0]
-document.getElementById("fecha").value = hoy
+function fechaPeru(){
 
+const ahora = new Date()
+
+const peru = new Date(
+ahora.toLocaleString("en-US",{timeZone:"America/Lima"})
+)
+
+const yyyy = peru.getFullYear()
+const mm = String(peru.getMonth()+1).padStart(2,'0')
+const dd = String(peru.getDate()).padStart(2,'0')
+
+return `${yyyy}-${mm}-${dd}`
+
+}
+
+document.getElementById("fecha").value = fechaPeru()
 cargarRegistros()
 document.getElementById("fecha").addEventListener("change",cargarRegistros)
 
@@ -209,6 +226,140 @@ async function eliminar(id){
     }
 
     cargarRegistros()
+}
+
+//GENERAR REPORTE PDF
+//GENERAR REPORTE PDF A4 DOS COLUMNAS
+//GENERAR REPORTE PDF
+//GENERAR REPORTE PDF (4 FOTOS POR HOJA - DATOS ARRIBA)
+async function generarReporte(){
+
+const { jsPDF } = window.jspdf
+
+const doc = new jsPDF({
+orientation:"portrait",
+unit:"mm",
+format:"a4"
+})
+
+const fecha = document.getElementById("fecha").value
+
+// obtener rutas del día
+const { data:rutas } = await clienteSupabase
+.from("rutas")
+.select("*")
+.eq("fecha",fecha)
+
+let primeraPagina = true
+
+for(const r of rutas){
+
+if(!primeraPagina){
+doc.addPage()
+}
+
+primeraPagina = false
+
+doc.setFontSize(16)
+doc.text("Reporte de Unidades",10,10)
+
+doc.setFontSize(11)
+
+// DATOS EN UNA SOLA LINEA
+doc.text(`Fecha: ${r.fecha}    Ruta: ${r.ruta}    Placa: ${r.placa}`,10,20)
+
+
+// posiciones de las 4 fotos
+let posiciones = [
+{ x:10 , y:30 },
+{ x:105, y:30 },
+{ x:10 , y:160 },
+{ x:105, y:160 }
+]
+
+
+// obtener fotos
+const { data:fotos } = await clienteSupabase
+.from("fotos")
+.select("*")
+.eq("placa",r.placa)
+.eq("fecha",r.fecha)
+
+let indice = 0
+
+for(const f of fotos){
+
+if(indice >= 4) break
+
+const pos = posiciones[indice]
+
+const img = await cargarImagen(f.url)
+
+// FOTO GRANDE
+await agregarImagenAuto(doc,img,pos.x,pos.y,90,110)
+
+indice++
+
+}
+
+}
+
+doc.save("reporte_rutas.pdf")
+
+}
+
+function cargarImagen(url){
+
+return new Promise(resolve=>{
+
+const img = new Image()
+img.crossOrigin = "anonymous"
+
+img.onload = function(){
+
+const canvas = document.createElement("canvas")
+canvas.width = img.width
+canvas.height = img.height
+
+const ctx = canvas.getContext("2d")
+ctx.drawImage(img,0,0)
+
+resolve(canvas.toDataURL("image/jpeg"))
+
+}
+
+img.src = url
+
+})
+
+}
+
+function agregarImagenAuto(doc,imgData,x,y,maxAncho,maxAlto){
+
+return new Promise(resolve=>{
+
+const img = new Image()
+
+img.onload=function(){
+
+let ancho = img.width
+let alto = img.height
+
+const ratio = Math.min(maxAncho/ancho, maxAlto/alto)
+
+ancho *= ratio
+alto *= ratio
+
+doc.addImage(imgData,'JPEG',x,y,ancho,alto)
+
+resolve(alto)
+
+}
+
+img.src = imgData
+
+})
+
 }
 
 </script>
