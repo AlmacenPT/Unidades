@@ -89,6 +89,8 @@ Ruta reporte
 <th>Placa</th>
 <th>Fotos</th>
 <th>Ir Fotos</th>
+<th id="colPrecintos" style="display:none;">Precintos</th>
+<th id="colIrPrecintos" style="display:none;">Ir Precintos</th>
 <th id="colAccion" style="display:none;">Acción</th>
 </tr>
 </thead>
@@ -209,6 +211,17 @@ async function cargarRegistros(){
             <td>
                 <button class="btn-fotos" onclick="abrirFotos('${reg.placa}','${reg.fecha}')">📷 Fotos</button>
             </td>
+
+${modoAdmin ? `
+<td>${reg.precintos || 0}</td>
+
+<td>
+<button onclick="abrirPrecintos('${reg.placa}','${reg.fecha}')">
+📋 Precintos
+</button>
+</td>
+` : ``}
+
             ${modoAdmin ? `
 <td>
 <button class="btn-eliminar" onclick="eliminar(${reg.id})">Eliminar</button>
@@ -255,6 +268,14 @@ function abrirFotos(placa,fecha){
 
 }
 
+// ABRIR PAGINA PRECINTOS
+function abrirPrecintos(placa,fecha){
+
+window.location =
+`precintos.html?placa=${placa}&fecha=${fecha}`
+
+}
+
 // ELIMINAR
 async function eliminar(id){
 
@@ -286,9 +307,9 @@ format:"a4"
 })
 
 const fecha = document.getElementById("fecha").value
-
-// obtener rutas del día
 const rutaFiltro = document.getElementById("rutaReporte").value
+
+/* CONSULTAR RUTAS */
 
 let query = clienteSupabase
 .from("rutas")
@@ -301,26 +322,144 @@ query = query.eq("ruta",rutaFiltro)
 
 const { data:rutas } = await query
 
-let primeraPagina = true
+if(!rutas || rutas.length===0){
+alert("No hay datos")
+return
+}
+
+/* PAGINA 1 : TABLA UNIDADES */
+
+doc.setFontSize(16)
+doc.text("Listado de Unidades",10,10)
+
+doc.setFontSize(11)
+
+let y = 25
+
+// encabezado
+doc.rect(10,y-6,15,8)
+doc.rect(25,y-6,35,8)
+doc.rect(60,y-6,70,8)
+doc.rect(130,y-6,40,8)
+
+doc.text("N°",12,y)
+doc.text("Fecha",27,y)
+doc.text("Ruta",62,y)
+doc.text("Placa",132,y)
+
+y += 8
+
+rutas.forEach((r,i)=>{
+
+let rutaTexto = doc.splitTextToSize(String(r.ruta),65)
+
+let alturaFila = rutaTexto.length * 6
+
+if(alturaFila < 8){
+alturaFila = 8
+}
+
+// dibujar celdas
+doc.rect(10,y-6,15,alturaFila)
+doc.rect(25,y-6,35,alturaFila)
+doc.rect(60,y-6,70,alturaFila)
+doc.rect(130,y-6,40,alturaFila)
+
+// escribir texto
+doc.text(String(i+1),12,y)
+doc.text(String(r.fecha),27,y)
+doc.text(rutaTexto,62,y)
+doc.text(String(r.placa),132,y)
+
+y += alturaFila
+
+if(y>270){
+doc.addPage()
+y=20
+}
+
+})
+
+/* OBTENER PRECINTOS */
+
+const placas = rutas.map(r=>r.placa)
+
+const { data:precintos } = await clienteSupabase
+.from("precintos")
+.select("*")
+.in("placa",placas)
+.eq("fecha",fecha)
+
+/* PAGINA 2 : TABLA PRECINTOS */
+
+doc.addPage()
+
+doc.setFontSize(16)
+doc.text("Listado de Precintos",10,10)
+
+doc.setFontSize(11)
+
+let y2 = 25
+
+// encabezado
+doc.rect(10,y2-6,15,8)
+doc.rect(25,y2-6,30,8)
+doc.rect(55,y2-6,30,8)
+doc.rect(85,y2-6,30,8)
+doc.rect(115,y2-6,30,8)
+doc.rect(145,y2-6,30,8)
+
+doc.text("N°",12,y2)
+doc.text("Placa",27,y2)
+doc.text("Prec. Verde",57,y2)
+doc.text("Prec. Blanco",87,y2)
+doc.text("Crotal",117,y2)
+doc.text("Lote",147,y2)
+
+y2 += 8
+
+if(precintos){
+
+precintos.forEach((p,i)=>{
+
+doc.rect(10,y2-6,15,8)
+doc.rect(25,y2-6,30,8)
+doc.rect(55,y2-6,30,8)
+doc.rect(85,y2-6,30,8)
+doc.rect(115,y2-6,30,8)
+doc.rect(145,y2-6,30,8)
+
+doc.text(String(i+1),12,y2)
+doc.text(String(p.placa),27,y2)
+doc.text(String(p.precinto_1_verde),57,y2)
+doc.text(String(p.precinto_2_blanco),87,y2)
+doc.text(String(p.crotal),117,y2)
+doc.text(String(p.lote),147,y2)
+
+y2 += 8
+
+if(y2>280){
+doc.addPage()
+y2=20
+}
+
+})
+
+}
+
+/* PAGINAS DE FOTOS (SIN CAMBIOS) */
 
 for(const r of rutas){
 
-if(!primeraPagina){
 doc.addPage()
-}
-
-primeraPagina = false
 
 doc.setFontSize(16)
 doc.text("Reporte de Unidades",10,10)
 
 doc.setFontSize(11)
 
-// DATOS EN UNA SOLA LINEA
 doc.text(`Fecha: ${r.fecha}    Ruta: ${r.ruta}    Placa: ${r.placa}`,10,20)
 
-
-// posiciones de las 4 fotos
 let posiciones = [
 { x:10 , y:30 },
 { x:105, y:30 },
@@ -328,8 +467,6 @@ let posiciones = [
 { x:105, y:160 }
 ]
 
-
-// obtener fotos
 const { data:fotos } = await clienteSupabase
 .from("fotos")
 .select("*")
@@ -346,7 +483,6 @@ const pos = posiciones[indice]
 
 const img = await cargarImagen(f.url)
 
-// FOTO GRANDE
 await agregarImagenAuto(doc,img,pos.x,pos.y,90,110)
 
 indice++
@@ -358,6 +494,7 @@ indice++
 doc.save("reporte_rutas.pdf")
 
 }
+
 
 function cargarImagen(url){
 
@@ -430,6 +567,8 @@ if(clave === "1234"){
 modoAdmin = true
 
 document.getElementById("colAccion").style.display=""
+document.getElementById("colPrecintos").style.display=""
+document.getElementById("colIrPrecintos").style.display=""
 
 alert("Modo administrador activado")
 
