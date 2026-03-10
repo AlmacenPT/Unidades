@@ -11,10 +11,13 @@ body{
     font-family: Arial;
     margin:20px;
 }
-input,button{
-    padding:6px;
-    margin:5px;
+
+input,select,button{
+padding:6px;
+margin:5px;
+font-size:14px;
 }
+
 table{
     border-collapse: collapse;
     margin-top:20px;
@@ -65,7 +68,17 @@ Placa
 <input type="text" id="placa">
 
 <button onclick="guardar()">Registrar</button>
+
+<br><br>
+
+Ruta reporte
+<select id="rutaReporte">
+<option value="">Todas</option>
+</select>
+
 <button onclick="generarReporte()">Generar Reporte PDF</button>
+
+<button onclick="activarAdmin()">Modo Admin</button>
 
 <table id="tabla">
 <thead>
@@ -76,7 +89,7 @@ Placa
 <th>Placa</th>
 <th>Fotos</th>
 <th>Ir Fotos</th>
-<th>Acción</th>
+<th id="colAccion" style="display:none;">Acción</th>
 </tr>
 </thead>
 
@@ -86,6 +99,7 @@ Placa
 
 
 <script>
+	let modoAdmin = false
 
 const clienteSupabase = window.supabase.createClient(
 "https://hwjhemjgyducdnxbahak.supabase.co",
@@ -109,10 +123,17 @@ return `${yyyy}-${mm}-${dd}`
 
 }
 
-document.getElementById("fecha").value = fechaPeru()
-cargarRegistros()
-document.getElementById("fecha").addEventListener("change",cargarRegistros)
+let fechaGuardada = localStorage.getItem("fechaSeleccionada")
 
+if(fechaGuardada){
+document.getElementById("fecha").value = fechaGuardada
+}else{
+document.getElementById("fecha").value = fechaPeru()
+}
+
+cargarRegistros()
+
+document.getElementById("fecha").addEventListener("change",cargarRegistros)
 
 // GUARDAR
 async function guardar(){
@@ -188,26 +209,51 @@ async function cargarRegistros(){
             <td>
                 <button class="btn-fotos" onclick="abrirFotos('${reg.placa}','${reg.fecha}')">📷 Fotos</button>
             </td>
-            <td>
-                <button class="btn-eliminar" onclick="eliminar(${reg.id})">Eliminar</button>
-            </td>
+            ${modoAdmin ? `
+<td>
+<button class="btn-eliminar" onclick="eliminar(${reg.id})">Eliminar</button>
+</td>
+` : ``}
         </tr>
         `
 
         tbody.innerHTML += fila
         contador++
     }
-
+cargarRutas()
 }
 
+async function cargarRutas(){
+
+const fecha = document.getElementById("fecha").value
+
+const {data} = await clienteSupabase
+.from("rutas")
+.select("ruta")
+.eq("fecha",fecha)
+
+const rutasUnicas = [...new Set(data.map(r => r.ruta))]
+
+const selector = document.getElementById("rutaReporte")
+
+selector.innerHTML = '<option value="">Todas</option>'
+
+rutasUnicas.forEach(ruta =>{
+
+selector.innerHTML += `<option value="${ruta}">${ruta}</option>`
+
+})
+
+}
 
 // ABRIR PAGINA FOTOS
 function abrirFotos(placa,fecha){
 
+    localStorage.setItem("fechaSeleccionada",fecha)
+
     window.location = `fotos.html?placa=${placa}&fecha=${fecha}`
 
 }
-
 
 // ELIMINAR
 async function eliminar(id){
@@ -228,9 +274,6 @@ async function eliminar(id){
     cargarRegistros()
 }
 
-//GENERAR REPORTE PDF
-//GENERAR REPORTE PDF A4 DOS COLUMNAS
-//GENERAR REPORTE PDF
 //GENERAR REPORTE PDF (4 FOTOS POR HOJA - DATOS ARRIBA)
 async function generarReporte(){
 
@@ -245,10 +288,18 @@ format:"a4"
 const fecha = document.getElementById("fecha").value
 
 // obtener rutas del día
-const { data:rutas } = await clienteSupabase
+const rutaFiltro = document.getElementById("rutaReporte").value
+
+let query = clienteSupabase
 .from("rutas")
 .select("*")
 .eq("fecha",fecha)
+
+if(rutaFiltro){
+query = query.eq("ruta",rutaFiltro)
+}
+
+const { data:rutas } = await query
 
 let primeraPagina = true
 
@@ -359,6 +410,36 @@ resolve(alto)
 img.src = imgData
 
 })
+
+}
+
+document.addEventListener("visibilitychange", function(){
+
+    if(document.visibilityState === "visible"){
+        cargarRegistros()
+    }
+
+})
+
+function activarAdmin(){
+
+const clave = prompt("Ingrese clave de administrador")
+
+if(clave === "1234"){
+
+modoAdmin = true
+
+document.getElementById("colAccion").style.display=""
+
+alert("Modo administrador activado")
+
+cargarRegistros()
+
+}else{
+
+alert("Clave incorrecta")
+
+}
 
 }
 
