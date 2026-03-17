@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <title>Registro de Rutas</title>
-
+	
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2c3e50">
+	
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 
 <style>
@@ -583,6 +586,13 @@ alert("Clave incorrecta")
 }
 
 </script>
-
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js')
+  .then(function() {
+    console.log("Service Worker registrado");
+  });
+}
+</script>
 </body>
 </html>
